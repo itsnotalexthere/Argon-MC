@@ -1,0 +1,17 @@
+{
+  "name": "argon-mc",
+  "version": "1.0.0",
+  "description": "A simple Minecraft Launcher",
+  "main": "index.js",
+  "scripts": {
+    "test": "electron ."
+  },
+  "keywords": [
+    "minecraft-launcher"
+  ],
+  "author": "Itsnotalexthere",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^29.1.0"
+  }
+}
