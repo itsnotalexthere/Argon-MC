@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const Store = require("electron-store");
 const { Console } = require("console");
-const { exit } = require("process");
+const { exit, electron } = require("process");
 const store = new Store();
 
 let playerToken = null;
@@ -41,10 +41,11 @@ app.whenReady().then(() => {
     handleLogin();
   });
   ipcMain.on("play", (version) => {
-    handlePlay(version);
+    handlePlay(toString(version));
   });
   ipcMain.on("clearStore", () => {
     store.clear();
+    app.relaunch();
     exit(0);
   });
 });
@@ -53,6 +54,7 @@ const launcher = new Client();
 
 function handlePlay(version) {
   console.log("Version: " + version);
+  
   store.set("version", version);
 
   version = store.get("version");

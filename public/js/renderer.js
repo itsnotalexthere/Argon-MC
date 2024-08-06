@@ -3,7 +3,8 @@ function loginMSA() {
 }
 
 function launchGame() {
-  window.electronAPI.play(setVersion);
+  var version = setVersion();
+  window.electronAPI.play(version);
   console.log(version);
 }
 
