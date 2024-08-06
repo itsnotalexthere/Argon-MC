@@ -1,7 +1,10 @@
-const { contextBridge, ipcRenderer } = require("electron/renderer")
+const { contextBridge, ipcRenderer } = require("electron/renderer");
 
 contextBridge.exposeInMainWorld("electronAPI", {
-    login: () => ipcRenderer.send("login-MSA"),
-    play: (version) => ipcRenderer.send("play", version),
-    clearStore: () => ipcRenderer.send("clearStore")
+  login: () => ipcRenderer.send("login-MSA"),
+  play: () => ipcRenderer.send("play"),
+  clearStore: () => ipcRenderer.send("clearStore"),
+  setVersion: (string) => ipcRenderer.send("set-version", string),
+  errorLog: (callback) => ipcRenderer.on('err-log', (event, message) => callback(message)),
+
 });

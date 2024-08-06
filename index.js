@@ -10,10 +10,33 @@ const { Console } = require("console");
 const { exit, electron } = require("process");
 const store = new Store();
 
+const modDir = path.join(process.env.APPDATA, ".argon", "mods");
 let playerToken = null;
 let jrePath =
   "C:/Users/alexi/AppData/Local/Packages/Microsoft.4297127D64EC6_8wekyb3d8bbwe/LocalCache/Local/runtime/java-runtime-gamma/windows-x64/java-runtime-gamma/bin/javaw.exe";
 let win;
+const modApi = "https://api.modrinth.com/v2/";
+const mods = [
+  "Axiom",
+  "Sodium",
+  "Lithium",
+  "Starlight",
+  "c2me",
+  "Fabric Api",
+  "Reese's Sodium Options",
+  "Sodium Extras",
+  "Iris Shaders",
+  "Mod Menu",
+  "Indium",
+  "Dynamic FPS",
+  "Continuity",
+  "StutterFix",
+  "ETF",
+  "EMF",
+  "Zoomify",
+  "LazyDFU",
+  "Better F3",
+];
 
 // Electron main function, DO NOT TOUCH UNLESS CHANGING SETTINGS
 const createWindow = () => {
@@ -40,33 +63,41 @@ app.whenReady().then(() => {
   ipcMain.on("login-MSA", () => {
     handleLogin();
   });
-  ipcMain.on("play", (version) => {
-    handlePlay(toString(version));
+  ipcMain.on("play", () => {
+    handlePlay();
   });
   ipcMain.on("clearStore", () => {
     store.clear();
     app.relaunch();
     exit(0);
   });
+  ipcMain.on("set-version", (event, arg) => {
+    console.log("Last version played: " + store.get("lastPlayedVersion"));
+    console.log("Set version to:", arg);
+    store.set("version", arg);
+  });
 });
 
 const launcher = new Client();
 
-function handlePlay(version) {
-  console.log("Version: " + version);
-  
-  store.set("version", version);
+function handlePlay() {
+  store.set("lastPlayedVersion", store.get("version"));
+  let version = store.get("version");
 
-  version = store.get("version");
-  let versionDir = path.join(process.env.APPDATA, ".argon", "versions", `fabric-${version}`);
+  removeMods();
+
+  let versionDir = path.join(
+    process.env.APPDATA,
+    ".argon",
+    "versions",
+    `fabric-${version}`
+  );
   let gamePath = path.join(process.env.APPDATA, ".argon");
-  
   console.log("Path: " + versionDir);
 
   if (!fs.existsSync(versionDir)) {
     fs.mkdirSync(versionDir, { recursive: true });
   }
-
 
   // Retrieve the playerToken from the local storage
   let playerToken = store.get("playerToken");
@@ -97,9 +128,10 @@ function handlePlay(version) {
 
       // Launch the game with the updated opts object
       console.log("Starting!");
-      launcher.launch(opts);
 
-      launcher.on("debug", (e) => console.log(e));
+      installMods(version);
+
+      launcher.launch(opts);
       launcher.on("data", (e) => console.log(e));
     })
     .catch((error) => {
@@ -118,3 +150,69 @@ function handleLogin() {
     store.set("playerToken", playerToken);
   });
 }
+
+function removeMods() {
+  if (fs.existsSync(modDir)) {
+    fs.rm(modDir, { recursive: true });
+  }
+}
+
+async function installMods(version) {
+  const modDir = path.join(process.env.APPDATA, ".argon", "mods");
+  if (!fs.existsSync(modDir)) {
+    fs.mkdirSync(modDir, { recursive: true });
+  }
+
+  for (const mod of mods) {
+    const modPath = path.join(modDir, `${mod}-${version}.jar`);
+    if (!fs.existsSync(modPath)) {
+      try {
+        const searchResponse = await axios.get(modApi + "search", {
+          params: {
+            query: mod,
+            sort: "relevance",
+          },
+        });
+
+        const modId = searchResponse.data.hits[0].slug;
+        const versionResponse = await axios.get(
+          modApi + "project/" + modId + "/version",
+          {
+            params: {
+              loaders: "fabric",
+            },
+          }
+        );
+
+        const filteredData = versionResponse.data.filter((item) =>
+          item.game_versions.includes(version)
+        );
+        if (filteredData.length > 0) {
+          const downloadUrl = filteredData[0].files[0].url; // Adjust index if there are multiple files
+
+          const writer = fs.createWriteStream(modPath);
+          const downloadResponse = await axios.get(downloadUrl, {
+            responseType: "stream",
+          });
+
+          downloadResponse.data.pipe(writer);
+
+          await new Promise((resolve, reject) => {
+            writer.on("finish", resolve);
+            writer.on("error", reject);
+          });
+
+          console.log(`Downloaded ${mod} to ${modPath}`);
+        } else {
+          console.log(`No compatible version found for ${mod}`);
+        }
+      } catch (error) {
+        console.error(`Error downloading ${mod}:`, error.message);
+      }
+    } else {
+      console.log(`${mod} is already downloaded.`);
+    }
+  }
+}
+
+const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
