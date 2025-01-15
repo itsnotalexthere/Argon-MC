@@ -14,16 +14,18 @@
   "author": "Itsnotalexthere",
   "license": "Apache-2.0",
   "devDependencies": {
-    "electron": "^29.1.0",
-    "electron-builder": "^24.12.0"
+    "electron": "^29.4.6",
+    "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "axios": "^1.6.7",
-    "electron-store": "^8.1.0",
-    "minecraft-launcher-core": "^3.18.0",
-    "msmc": "^5.0.4"
+    "axios": "^1.7.9",
+    "electron-store": "^8.2.0",
+    "minecraft-launcher-core": "^3.18.2",
+    "msmc": "^5.0.5",
+    "tomate-loaders": "^2.0.2"
   },
   "build": {
     "appId": "com.itsnotalexthere.argonmc"
-  }
+  },
+  "packageManager": "pnpm@9.12.3+sha512.cce0f9de9c5a7c95bef944169cc5dfe8741abfb145078c0d508b868056848a87c81e626246cb60967cbd7fd29a6c062ef73ff840d96b3c86c40ac92cf4a813ee"
 }

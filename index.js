@@ -1,164 +1,131 @@
 const { app, BrowserWindow, ipcMain } = require("electron");
-const { globalShortcut } = require("electron");
 const axios = require("axios");
 const { Client } = require("minecraft-launcher-core");
 const { Auth } = require("msmc");
 const fs = require("fs");
 const path = require("path");
 const Store = require("electron-store");
-const { Console } = require("console");
-const { exit, electron } = require("process");
-const store = new Store();
+const { fabric } = require("tomate-loaders");
 
-const modDir = path.join(process.env.APPDATA, ".argon", "mods");
-let playerToken = null;
-let jrePath =
-  "C:/Users/alexi/AppData/Local/Packages/Microsoft.4297127D64EC6_8wekyb3d8bbwe/LocalCache/Local/runtime/java-runtime-gamma/windows-x64/java-runtime-gamma/bin/javaw.exe";
+const store = new Store();
 let win;
 const modApi = "https://api.modrinth.com/v2/";
-const mods = [
-  "Axiom",
-  "Sodium",
-  "Lithium",
-  "Starlight",
-  "c2me",
-  "Fabric Api",
-  "Reese's Sodium Options",
-  "Sodium Extras",
-  "Iris Shaders",
-  "Mod Menu",
-  "Indium",
-  "Dynamic FPS",
-  "Continuity",
-  "StutterFix",
-  "ETF",
-  "EMF",
-  "Zoomify",
-  "LazyDFU",
-  "Better F3",
-];
 
-// Electron main function, DO NOT TOUCH UNLESS CHANGING SETTINGS
+const mods = ["Sodium", "Lithium", "Logical Zoom", "Fabric API"];
+let jrePath = `C:\\Users\\alexi\\AppData\\Roaming\\PrismLauncher\\java\\java-runtime-gamma\\bin\\javaw.exe`;
+
+// Create Electron window
 const createWindow = () => {
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     width: 900,
     height: 600,
     frame: false,
     resizable: false,
     webPreferences: {
-      enableRemoteModule: true,
       preload: path.join(__dirname, "preload.js"),
     },
   });
-  //win.removeMenu();
-  if (store.get("playerToken")) {
-    win.loadFile(path.join(__dirname, "public", "play.html"));
-  } else {
-    win.loadFile(path.join(__dirname, "public", "login.html"));
-  }
+
+  const startPage = store.get("playerToken")
+    ? path.join(__dirname, "public", "play.html")
+    : path.join(__dirname, "public", "login.html");
+
+  win.loadFile(startPage);
 };
 
 app.whenReady().then(() => {
   createWindow();
-  ipcMain.on("login-MSA", () => {
-    handleLogin();
-  });
-  ipcMain.on("play", () => {
-    handlePlay();
-  });
+
+  ipcMain.on("login-MSA", handleLogin);
+  ipcMain.on("play", handlePlay);
   ipcMain.on("clearStore", () => {
     store.clear();
-    app.relaunch();
-    exit(0);
+    win.loadFile(path.join(__dirname, "public", "login.html"));
   });
-  ipcMain.on("set-version", (event, arg) => {
-    console.log("Last version played: " + store.get("lastPlayedVersion"));
-    console.log("Set version to:", arg);
-    store.set("version", arg);
+  ipcMain.on("set-version", (event, version) => {
+    console.log("Set version to:", version);
+    store.set("version", version);
+  });
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
   });
 });
 
 const launcher = new Client();
 
-function handlePlay() {
-  store.set("lastPlayedVersion", store.get("version"));
-  let version = store.get("version");
-
-  removeMods();
-
-  let versionDir = path.join(
-    process.env.APPDATA,
-    ".argon",
-    "versions",
-    `fabric-${version}`
-  );
-  let gamePath = path.join(process.env.APPDATA, ".argon");
-  console.log("Path: " + versionDir);
-
-  if (!fs.existsSync(versionDir)) {
-    fs.mkdirSync(versionDir, { recursive: true });
+async function handlePlay() {
+  const playerToken = store.get("playerToken");
+  const version = store.get("version");
+  if (!version) {
+    console.error("No version set. Unable to launch the game.");
+    return;
   }
 
-  // Retrieve the playerToken from the local storage
-  let playerToken = store.get("playerToken");
-  let opts = {
+  const gamePath = path.join(process.env.APPDATA, ".argon");
+  if (!fs.existsSync(gamePath)) {
+    fs.mkdirSync(gamePath, { recursive: true });
+  }
+  let modsDir = path.join(gamePath, "mods");
+
+  const modOpts = await fabric.getMCLCLaunchConfig({
+    rootPath: gamePath,
+    gameVersion: version,
+  });
+
+  const opts = {
+    ...modOpts,
     clientPackage: null,
-    // Simply call this function to convert the msmc Minecraft object into a mclc authorization object
     authorization: playerToken,
-    root: gamePath,
-    version: {
-      number: version,
-      type: "release",
-      custom: `fabric-${version}`,
-    },
-    memory: {
-      max: "6G",
-      min: "4G",
-    },
     javaPath: jrePath,
+    memory: {
+      max: "4G",
+      min: "2G",
+    },
   };
-  axios
-    .get(
-      `https://meta.fabricmc.net/v2/versions/loader/${version}/0.15.11/profile/json`
-    )
-    .then((response) => {
-      // Write the JSON response to the local filesystem
-      const versionFile = path.join(versionDir, `fabric-${version}.json`);
-      fs.writeFileSync(versionFile, JSON.stringify(response.data, null, 2));
 
-      // Launch the game with the updated opts object
-      console.log("Starting!");
+  console.log("Launching the game with options:", opts);
 
-      installMods(version);
+  try {
+    await installMods(modsDir, version);
 
-      launcher.launch(opts);
-      launcher.on("data", (e) => console.log(e));
-    })
-    .catch((error) => {
-      console.error(error);
+    launcher.launch(opts);
+
+    launcher.on("data", (log) => {
+      console.log(log);
     });
+
+    launcher.on("error", (error) => {
+      console.error("Launcher error:", error);
+    });
+
+    launcher.on("close", (code) => {
+      console.log("Game closed with code:", code);
+    });
+  } catch (error) {
+    console.error("Failed to launch the game:", error);
+  }
 }
 
 function handleLogin() {
   const authManager = new Auth("select_account");
   authManager.launch("electron").then(async (xboxManager) => {
-    const token = await xboxManager.getMinecraft();
-    playerToken = token.mclc(); // Assign the token to the outer playerToken variable
-    BrowserWindow.getFocusedWindow().loadFile(
-      path.join(__dirname, "public", "play.html")
-    );
-    store.set("playerToken", playerToken);
+    try {
+      const token = await xboxManager.getMinecraft();
+      playerToken = token.mclc();
+      store.set("playerToken", playerToken);
+      console.log("Player token:", playerToken);
+      const focusedWindow = BrowserWindow.getFocusedWindow();
+      if (focusedWindow) {
+        focusedWindow.loadFile(path.join(__dirname, "public", "play.html"));
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
   });
 }
 
-function removeMods() {
-  if (fs.existsSync(modDir)) {
-    fs.rm(modDir, { recursive: true });
-  }
-}
-
-async function installMods(version) {
-  const modDir = path.join(process.env.APPDATA, ".argon", "mods");
+async function installMods(modDir, version) {
   if (!fs.existsSync(modDir)) {
     fs.mkdirSync(modDir, { recursive: true });
   }
@@ -168,44 +135,42 @@ async function installMods(version) {
     if (!fs.existsSync(modPath)) {
       try {
         const searchResponse = await axios.get(modApi + "search", {
-          params: {
-            query: mod,
-            sort: "relevance",
-          },
+          params: { query: mod, sort: "relevance" },
         });
 
-        const modId = searchResponse.data.hits[0].slug;
+        const modId = searchResponse.data.hits[0]?.slug;
+        if (!modId) throw new Error(`Mod ID not found for ${mod}`);
+
         const versionResponse = await axios.get(
           modApi + "project/" + modId + "/version",
           {
-            params: {
-              loaders: "fabric",
-            },
+            params: { loaders: "fabric" },
           }
         );
 
-        const filteredData = versionResponse.data.filter((item) =>
+        const compatibleVersion = versionResponse.data.find((item) =>
           item.game_versions.includes(version)
         );
-        if (filteredData.length > 0) {
-          const downloadUrl = filteredData[0].files[0].url; // Adjust index if there are multiple files
 
-          const writer = fs.createWriteStream(modPath);
-          const downloadResponse = await axios.get(downloadUrl, {
-            responseType: "stream",
-          });
-
-          downloadResponse.data.pipe(writer);
-
-          await new Promise((resolve, reject) => {
-            writer.on("finish", resolve);
-            writer.on("error", reject);
-          });
-
-          console.log(`Downloaded ${mod} to ${modPath}`);
-        } else {
+        if (!compatibleVersion) {
           console.log(`No compatible version found for ${mod}`);
+          continue;
         }
+
+        const downloadUrl = compatibleVersion.files[0].url;
+        const writer = fs.createWriteStream(modPath);
+
+        const downloadResponse = await axios.get(downloadUrl, {
+          responseType: "stream",
+        });
+
+        downloadResponse.data.pipe(writer);
+        await new Promise((resolve, reject) => {
+          writer.on("finish", resolve);
+          writer.on("error", reject);
+        });
+
+        console.log(`Downloaded ${mod} to ${modPath}`);
       } catch (error) {
         console.error(`Error downloading ${mod}:`, error.message);
       }
@@ -214,5 +179,3 @@ async function installMods(version) {
     }
   }
 }
-
-const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay));

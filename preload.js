@@ -5,6 +5,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   play: () => ipcRenderer.send("play"),
   clearStore: () => ipcRenderer.send("clearStore"),
   setVersion: (string) => ipcRenderer.send("set-version", string),
-  errorLog: (callback) => ipcRenderer.on('err-log', (event, message) => callback(message)),
+  log: (callback) => ipcRenderer.on('log', (event, message) => callback(message)),
 
 });

@@ -1,5 +1,4 @@
 document.getElementById("versionMenu").addEventListener("change", setVersion);
-document.getElementById("errorBtn").addEventListener("click", showLogs);
 function loginMSA() {
   window.electronAPI.login();
 }
@@ -14,8 +13,7 @@ function setVersion() {
   window.electronAPI.setVersion(version);
 }
 
-
-window.electronAPI.errorLog((message) => {
-  const errorContainer = document.getElementById("errorContainer");
+window.electronAPI.log((message) => {
+  const errorContainer = document.getElementById("gameLog-container");
   errorContainer.innerText = errorContainer.value + "\n" + message;
 })
